@@ -1,0 +1,1452 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>日跡 DayLog — 每日日記與行程規劃</title>
+  <!-- Google Fonts: Noto Sans TC & Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Inter"', '"Noto Sans TC"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            paper: '#FAF9F6',
+            ink: '#1E293B',
+            sage: {
+              50: '#F4F7F5',
+              100: '#E3EBE6',
+              600: '#3D6B58',
+              700: '#2E5243',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      background-color: #FAF9F6;
+      color: #1E293B;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Smooth strikethrough animation for completed items */
+    .event-title-text {
+      position: relative;
+      transition: color 0.25s ease, opacity 0.25s ease;
+    }
+    .event-completed .event-title-text {
+      text-decoration: line-through;
+      text-decoration-thickness: 2px;
+      text-decoration-color: #94A3B8;
+      color: #94A3B8;
+    }
+    .event-completed .event-details-group {
+      opacity: 0.55;
+      text-decoration: line-through;
+      text-decoration-color: #CBD5E1;
+    }
+
+    /* Custom subtle scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #CBD5E1;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94A3B8;
+    }
+
+    /* Print / PDF Stylesheet */
+    @media print {
+      body {
+        background-color: #FFFFFF !important;
+        color: #0F172A !important;
+      }
+      .no-print {
+        display: none !important;
+      }
+      .print-only {
+        display: block !important;
+      }
+      .print-card {
+        box-shadow: none !important;
+        border: 1px solid #E2E8F0 !important;
+        break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-sage-100 selection:text-sage-700">
+
+  <!-- Top Navigation & Sync Header -->
+  <header class="sticky top-0 z-30 bg-[#FAF9F6]/90 backdrop-blur-md border-b border-stone-200/80 no-print">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-2">
+      <!-- Brand Identity -->
+      <div class="flex items-center gap-2.5">
+        <div class="w-9 h-9 rounded-xl bg-slate-800 text-white flex items-center justify-center shadow-sm">
+          <i data-lucide="book-open-check" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h1 class="text-base sm:text-lg font-bold tracking-tight text-slate-800 leading-none">日跡 DayLog</h1>
+          <p class="text-[11px] text-slate-500 mt-0.5 hidden sm:block">事件導向的網頁日記與行程同步</p>
+        </div>
+      </div>
+
+      <!-- Global Sync & Utility Actions -->
+      <div class="flex items-center gap-1.5 sm:gap-2">
+        <!-- Export Whole Day to iPhone / Apple Calendar (.ics) -->
+        <button
+          onclick="exportDayICS()"
+          title="匯出當日所有行程至 iPhone / Apple 行事曆 (.ics)"
+          class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-medium bg-white hover:bg-slate-50 text-slate-700 border border-stone-200 shadow-xs transition active:scale-[0.98]"
+        >
+          <i data-lucide="smartphone" class="w-4 h-4 text-indigo-600"></i>
+          <span>同步 iPhone (.ics)</span>
+        </button>
+
+        <!-- Sync Help / Guide Modal Trigger -->
+        <button
+          onclick="toggleSyncGuideModal(true)"
+          title="查看 Google 與 iPhone 同步說明"
+          class="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-xl text-xs sm:text-sm font-medium bg-sage-50 hover:bg-sage-100 text-sage-700 border border-sage-100 transition active:scale-[0.98]"
+        >
+          <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+          <span class="hidden md:inline">同步指南</span>
+        </button>
+
+        <!-- More Tools Dropdown (Print / Backup / Restore) -->
+        <div class="relative">
+          <button
+            id="moreMenuBtn"
+            onclick="toggleMoreMenu()"
+            aria-label="更多功能"
+            class="p-2 rounded-xl text-slate-600 hover:bg-white hover:text-slate-900 border border-transparent hover:border-stone-200 transition"
+          >
+            <i data-lucide="more-vertical" class="w-4 h-4"></i>
+          </button>
+          <div
+            id="moreMenuDropdown"
+            class="hidden absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-lg border border-stone-200 py-1.5 z-40 text-sm"
+          >
+            <button onclick="window.print(); toggleMoreMenu(false);" class="w-full px-3.5 py-2 text-left text-slate-700 hover:bg-slate-50 flex items-center gap-2.5">
+              <i data-lucide="printer" class="w-4 h-4 text-slate-500"></i>
+              <span>列印 / 存為 PDF</span>
+            </button>
+            <button onclick="exportJSONBackup(); toggleMoreMenu(false);" class="w-full px-3.5 py-2 text-left text-slate-700 hover:bg-slate-50 flex items-center gap-2.5">
+              <i data-lucide="download" class="w-4 h-4 text-slate-500"></i>
+              <span>匯出備份 (JSON)</span>
+            </button>
+            <label class="w-full px-3.5 py-2 text-left text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 cursor-pointer">
+              <i data-lucide="upload" class="w-4 h-4 text-slate-500"></i>
+              <span>匯入還原 (JSON)</span>
+              <input type="file" id="jsonImportInput" accept=".json" class="hidden" onchange="importJSONBackup(event)" />
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="flex-1 max-w-3xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
+
+    <!-- Date Selector & Mini 7-Day Strip Card -->
+    <section class="bg-white rounded-2xl border border-stone-200/90 shadow-xs p-4 sm:p-5 print-card">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <!-- Prev / Date Display / Next -->
+        <div class="flex items-center gap-2">
+          <button
+            onclick="changeDateBy(-1)"
+            aria-label="前一天"
+            class="p-2 rounded-xl border border-stone-200 hover:bg-slate-50 text-slate-600 transition active:scale-95 no-print"
+          >
+            <i data-lucide="chevron-left" class="w-4 h-4"></i>
+          </button>
+
+          <div class="relative flex items-center">
+            <label for="datePickerInput" class="cursor-pointer group flex items-center gap-2.5 px-3 py-1.5 rounded-xl hover:bg-slate-50 transition">
+              <div>
+                <div class="flex items-center gap-2">
+                  <span id="displayDateMain" class="text-lg sm:text-xl font-bold text-slate-800 tracking-tight">2026年11月26日</span>
+                  <span id="displayWeekdayBadge" class="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">週四</span>
+                </div>
+              </div>
+              <i data-lucide="calendar" class="w-4 h-4 text-slate-400 group-hover:text-slate-700 transition no-print"></i>
+            </label>
+            <input
+              type="date"
+              id="datePickerInput"
+              onchange="selectDate(this.value)"
+              class="sr-only"
+            />
+          </div>
+
+          <button
+            onclick="changeDateBy(1)"
+            aria-label="後一天"
+            class="p-2 rounded-xl border border-stone-200 hover:bg-slate-50 text-slate-600 transition active:scale-95 no-print"
+          >
+            <i data-lucide="chevron-right" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <!-- Quick Jump to Today + Progress Pill -->
+        <div class="flex items-center gap-2.5">
+          <span id="dailyProgressText" class="text-xs font-medium text-slate-500 bg-slate-100/80 px-2.5 py-1 rounded-full">
+            0 / 0 完成
+          </span>
+          <button
+            id="todayJumpBtn"
+            onclick="jumpToToday()"
+            class="hidden text-xs font-semibold px-3 py-1.5 rounded-full bg-slate-800 text-white hover:bg-slate-700 transition shadow-xs no-print"
+          >
+            回到今天
+          </button>
+        </div>
+      </div>
+
+      <!-- 7-Day Week Strip with Activity Dots -->
+      <div id="weekStripContainer" class="grid grid-cols-7 gap-1.5 sm:gap-2 mt-4 pt-3.5 border-t border-stone-100 no-print">
+        <!-- Populated by JS -->
+      </div>
+    </section>
+
+    <!-- Event-Centric Composer Card -->
+    <section class="bg-white rounded-2xl border border-stone-200/90 shadow-xs p-4 sm:p-5 no-print" id="composerSection">
+      <div class="flex items-center justify-between mb-3">
+        <h2 id="composerHeading" class="text-sm font-semibold text-slate-700 flex items-center gap-2">
+          <i data-lucide="plus-circle" class="w-4 h-4 text-sage-600"></i>
+          <span>新增行程事件</span>
+        </h2>
+        <button
+          id="cancelEditBtn"
+          onclick="resetComposer()"
+          class="hidden text-xs text-slate-500 hover:text-slate-800 underline"
+        >
+          取消編輯
+        </button>
+      </div>
+
+      <form id="eventForm" onsubmit="handleEventSubmit(event)" class="space-y-3.5">
+        <input type="hidden" id="editingEventId" value="" />
+
+        <!-- Primary Input: Event Title / Description (Required) -->
+        <div>
+          <label for="eventTitleInput" class="sr-only">事件內容</label>
+          <input
+            type="text"
+            id="eventTitleInput"
+            required
+            placeholder="輸入事件或行程內容（例如：大安森林公園散步、拜訪客戶、買咖啡豆...）"
+            class="w-full px-3.5 py-2.5 rounded-xl bg-stone-50/70 border border-stone-200 text-slate-800 placeholder-slate-400 text-sm sm:text-base font-medium focus:outline-none focus:bg-white focus:border-slate-400 focus:ring-2 focus:ring-slate-200/60 transition"
+          />
+        </div>
+
+        <!-- Optional Attributes Toggle Bar -->
+        <div class="flex flex-wrap items-center gap-2">
+          <!-- Toggle Optional Time -->
+          <button
+            type="button"
+            id="toggleTimeBtn"
+            onclick="toggleTimeFields()"
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border border-stone-200 bg-white text-slate-600 hover:bg-slate-50 transition"
+          >
+            <i data-lucide="clock" class="w-3.5 h-3.5 text-amber-600"></i>
+            <span id="toggleTimeLabel">加入時間（選填）</span>
+          </button>
+
+          <span class="text-[11px] text-slate-400 hidden sm:inline">• 地址與網頁資訊可直接填寫於下方</span>
+        </div>
+
+        <!-- Collapsible Time Range Row -->
+        <div id="timeFieldsRow" class="hidden grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl bg-amber-50/50 border border-amber-200/60">
+          <div>
+            <label for="startTimeInput" class="block text-xs font-medium text-slate-600 mb-1">開始時間</label>
+            <input
+              type="time"
+              id="startTimeInput"
+              class="w-full px-3 py-1.5 rounded-lg bg-white border border-stone-200 text-sm font-mono text-slate-800 focus:outline-none focus:border-amber-500"
+            />
+          </div>
+          <div>
+            <label for="endTimeInput" class="block text-xs font-medium text-slate-600 mb-1">結束時間（選填，預設 +1 小時）</label>
+            <input
+              type="time"
+              id="endTimeInput"
+              class="w-full px-3 py-1.5 rounded-lg bg-white border border-stone-200 text-sm font-mono text-slate-800 focus:outline-none focus:border-amber-500"
+            />
+          </div>
+        </div>
+
+        <!-- Optional Address & Web Info Grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <!-- Address Input -->
+          <div class="relative">
+            <div class="absolute inset-y-0 left-3 flex items-center pointer-events-none text-slate-400">
+              <i data-lucide="map-pin" class="w-4 h-4"></i>
+            </div>
+            <input
+              type="text"
+              id="eventAddressInput"
+              placeholder="地址或地點（選填，可一鍵導航）"
+              class="w-full pl-9 pr-3 py-2 rounded-xl bg-stone-50/70 border border-stone-200 text-xs sm:text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-slate-400 transition"
+            />
+          </div>
+
+          <!-- Web Info / URL / Memo Input -->
+          <div class="relative">
+            <div class="absolute inset-y-0 left-3 flex items-center pointer-events-none text-slate-400">
+              <i data-lucide="globe" class="w-4 h-4"></i>
+            </div>
+            <input
+              type="text"
+              id="eventWebInfoInput"
+              placeholder="網頁連結或備註資訊（選填，自動辨識網址）"
+              class="w-full pl-9 pr-3 py-2 rounded-xl bg-stone-50/70 border border-stone-200 text-xs sm:text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-slate-400 transition"
+            />
+          </div>
+        </div>
+
+        <!-- Submit Row -->
+        <div class="flex items-center justify-end pt-1">
+          <button
+            type="submit"
+            id="submitEventBtn"
+            class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold shadow-xs transition active:scale-[0.99]"
+          >
+            <i data-lucide="plus" class="w-4 h-4"></i>
+            <span id="submitBtnText">加入今日行程</span>
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <!-- Event List Controls & Itinerary Feed -->
+    <section class="space-y-3">
+      <!-- Filter & Sort Bar -->
+      <div class="flex flex-wrap items-center justify-between gap-2 px-1 no-print">
+        <!-- Status Filter Tabs -->
+        <div class="inline-flex p-1 rounded-xl bg-stone-200/70 text-xs font-medium">
+          <button
+            onclick="setFilter('all')"
+            data-filter="all"
+            class="filter-tab px-3 py-1 rounded-lg bg-white text-slate-800 shadow-2xs transition"
+          >
+            全部 (<span id="countAll">0</span>)
+          </button>
+          <button
+            onclick="setFilter('active')"
+            data-filter="active"
+            class="filter-tab px-3 py-1 rounded-lg text-slate-600 hover:text-slate-900 transition"
+          >
+            待辦 (<span id="countActive">0</span>)
+          </button>
+          <button
+            onclick="setFilter('completed')"
+            data-filter="completed"
+            class="filter-tab px-3 py-1 rounded-lg text-slate-600 hover:text-slate-900 transition"
+          >
+            已完成 (<span id="countCompleted">0</span>)
+          </button>
+        </div>
+
+        <!-- Sort & Clear Completed -->
+        <div class="flex items-center gap-2">
+          <button
+            onclick="toggleSortMode()"
+            id="sortModeBtn"
+            class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium bg-white border border-stone-200 text-slate-600 hover:bg-slate-50 transition"
+          >
+            <i data-lucide="arrow-up-down" class="w-3.5 h-3.5"></i>
+            <span id="sortModeLabel">時間優先排序</span>
+          </button>
+
+          <button
+            id="clearCompletedBtn"
+            onclick="promptClearCompleted()"
+            class="hidden inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-medium text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition"
+          >
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+            <span>清除已完成</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Events Container -->
+      <div id="eventsListContainer" class="space-y-2.5">
+        <!-- Populated dynamically -->
+      </div>
+    </section>
+
+    <!-- Daily Diary Reflection / Journal Memo Card -->
+    <section class="bg-white rounded-2xl border border-stone-200/90 shadow-xs p-4 sm:p-5 print-card">
+      <div class="flex items-center justify-between mb-2.5">
+        <label for="dailyJournalInput" class="text-sm font-semibold text-slate-700 flex items-center gap-2">
+          <i data-lucide="pen-line" class="w-4 h-4 text-indigo-600"></i>
+          <span>今日日記隨筆 & 心情紀錄</span>
+        </label>
+        <span id="journalSavedIndicator" class="text-[11px] text-slate-400">自動儲存於本機</span>
+      </div>
+      <textarea
+        id="dailyJournalInput"
+        rows="3"
+        oninput="handleJournalInput(this.value)"
+        placeholder="寫下今天的心得、天氣、靈感或行程總結..."
+        class="w-full px-3.5 py-2.5 rounded-xl bg-stone-50/70 border border-stone-200/80 text-sm text-slate-700 placeholder-slate-400 leading-relaxed focus:outline-none focus:bg-white focus:border-slate-300 transition resize-y"
+      ></textarea>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="max-w-3xl w-full mx-auto px-4 sm:px-6 py-6 text-center text-xs text-slate-400 no-print">
+    <p>所有資料皆安全儲存於您的瀏覽器本機（LocalStorage）• 支援一鍵匯出至 Google 日曆與 iPhone 行事曆</p>
+  </footer>
+
+  <!-- Toast Notification -->
+  <div
+    id="toastContainer"
+    class="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 pointer-events-none flex flex-col items-center gap-2 w-full max-w-sm px-4"
+  ></div>
+
+  <!-- Custom Confirmation Modal (Replaces window.confirm) -->
+  <div id="confirmModal" class="hidden fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-5 shadow-xl border border-stone-200 space-y-4">
+      <div class="flex items-start gap-3">
+        <div class="w-9 h-9 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+          <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h3 id="confirmModalTitle" class="text-base font-bold text-slate-800">確認操作</h3>
+          <p id="confirmModalMessage" class="text-sm text-slate-600 mt-1">確定要執行此動作嗎？</p>
+        </div>
+      </div>
+      <div class="flex items-center justify-end gap-2 pt-2">
+        <button onclick="closeConfirmModal()" class="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100 transition">
+          取消
+        </button>
+        <button id="confirmModalActionBtn" class="px-4 py-2 rounded-xl text-sm font-semibold bg-rose-600 hover:bg-rose-700 text-white transition">
+          確定刪除
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Google & iPhone Sync Guide Modal -->
+  <div id="syncGuideModal" class="hidden fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-xl border border-stone-200 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-stone-100 pb-3">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-xl bg-sage-100 text-sage-700 flex items-center justify-center">
+            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+          </div>
+          <h3 class="text-base font-bold text-slate-800">如何同步至 Google 日曆與 iPhone？</h3>
+        </div>
+        <button onclick="toggleSyncGuideModal(false)" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="space-y-4 text-sm text-slate-600 leading-relaxed">
+        <!-- iPhone / Apple Calendar -->
+        <div class="p-3.5 rounded-xl bg-indigo-50/60 border border-indigo-100 space-y-1.5">
+          <div class="font-bold text-slate-800 flex items-center gap-2">
+            <i data-lucide="smartphone" class="w-4 h-4 text-indigo-600"></i>
+            <span>1. 同步至 iPhone / iPad / Mac 行事曆 (.ics)</span>
+          </div>
+          <ul class="list-disc list-inside space-y-1 text-xs sm:text-sm text-slate-600">
+            <li>點擊上方<strong>「同步 iPhone (.ics)」</strong>可一次匯出當天所有未完成行程；或點擊單一事件卡片上的 <span class="font-mono bg-white px-1.5 py-0.5 rounded border border-indigo-100 text-indigo-700">iOS</span> 按鈕。</li>
+            <li>在 iPhone Safari 開啟下載的 <code class="font-mono text-indigo-700">.ics</code> 檔案，系統會自動跳出 Apple 行事曆預覽，點擊右上角<strong>「全部加入」</strong>即可同步至 iCloud 行事曆。</li>
+          </ul>
+        </div>
+
+        <!-- Google Calendar -->
+        <div class="p-3.5 rounded-xl bg-emerald-50/60 border border-emerald-100 space-y-1.5">
+          <div class="font-bold text-slate-800 flex items-center gap-2">
+            <i data-lucide="calendar-plus" class="w-4 h-4 text-emerald-600"></i>
+            <span>2. 一鍵加入 Google 日曆</span>
+          </div>
+          <ul class="list-disc list-inside space-y-1 text-xs sm:text-sm text-slate-600">
+            <li>點擊每個事件卡片右側的<strong>「Google」</strong>按鈕。</li>
+            <li>會直接開啟 Google 日曆新增頁面，並自動帶入<strong>事件標題、日期時間（未填時間則自動設為全天事件）、地點地址與網頁備註</strong>，按下「儲存」即完成同步。</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="flex justify-end pt-2">
+        <button onclick="toggleSyncGuideModal(false)" class="px-5 py-2 rounded-xl bg-slate-800 text-white text-sm font-semibold hover:bg-slate-700 transition">
+          我知道了
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // Application State & Storage Keys
+    // =========================================================================
+    const STORAGE_KEY_EVENTS = 'daylog_events_v1';
+    const STORAGE_KEY_JOURNALS = 'daylog_journals_v1';
+
+    let state = {
+      selectedDate: getTodayDateString(),
+      eventsByDate: {},   // { "YYYY-MM-DD": [ { id, title, hasTime, startTime, endTime, address, webInfo, completed, createdAt } ] }
+      journalsByDate: {}, // { "YYYY-MM-DD": "string" }
+      filter: 'all',      // 'all' | 'active' | 'completed'
+      sortByTime: true,   // true = timed events sorted chronologically first, false = creation order
+      showTimeFields: false
+    };
+
+    let pendingConfirmCallback = null;
+
+    // =========================================================================
+    // Date & Formatting Utilities
+    // =========================================================================
+    function getTodayDateString() {
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = String(now.getMonth() + 1).padStart(2, '0');
+      const d = String(now.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    function parseLocalDate(dateStr) {
+      const [y, m, d] = dateStr.split('-').map(Number);
+      return new Date(y, m - 1, d);
+    }
+
+    function formatDateToStr(dateObj) {
+      const y = dateObj.getFullYear();
+      const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const d = String(dateObj.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    function formatChineseDateHeader(dateStr) {
+      const dateObj = parseLocalDate(dateStr);
+      const y = dateObj.getFullYear();
+      const m = dateObj.getMonth() + 1;
+      const d = dateObj.getDate();
+      const weekdays = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
+      const weekday = weekdays[dateObj.getDay()];
+      return {
+        full: `${y}年${m}月${d}日`,
+        weekday
+      };
+    }
+
+    // Add 1 hour to HH:MM string for default end time
+    function addOneHour(timeStr) {
+      if (!timeStr) return '10:00';
+      const [h, m] = timeStr.split(':').map(Number);
+      const nextH = (h + 1) % 24;
+      return `${String(nextH).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    }
+
+    // Escape HTML to prevent XSS
+    function escapeHTML(str) {
+      if (!str) return '';
+      return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    // Extract URLs from webInfo string so we can render clickable link buttons + text notes
+    function parseWebInfo(rawText) {
+      if (!rawText || !rawText.trim()) return { urls: [], noteText: '' };
+      const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
+      const matches = rawText.match(urlRegex) || [];
+      const urls = matches.map(u => (u.startsWith('http') ? u : `https://${u}`));
+      const noteText = rawText.replace(urlRegex, '').replace(/\s{2,}/g, ' ').trim();
+      return { urls, noteText };
+    }
+
+    // =========================================================================
+    // Initialization & Persistence
+    // =========================================================================
+    function loadFromStorage() {
+      try {
+        const rawEvents = localStorage.getItem(STORAGE_KEY_EVENTS);
+        const rawJournals = localStorage.getItem(STORAGE_KEY_JOURNALS);
+
+        if (rawEvents) {
+          state.eventsByDate = JSON.parse(rawEvents);
+        } else {
+          // Seed initial helpful sample events for today so user sees full functionality immediately
+          const today = getTodayDateString();
+          state.eventsByDate[today] = [
+            {
+              id: 'sample-1',
+              title: '晨間咖啡與閱讀計畫',
+              hasTime: true,
+              startTime: '09:30',
+              endTime: '10:30',
+              address: '台北市大安區青田街',
+              webInfo: 'https://www.google.com 參考今日閱讀清單與筆記',
+              completed: true,
+              createdAt: Date.now() - 3600000
+            },
+            {
+              id: 'sample-2',
+              title: '整理週報與專案進度（彈性時間，無需指定幾點）',
+              hasTime: false,
+              startTime: '',
+              endTime: '',
+              address: '',
+              webInfo: '確認本週里程碑與設計稿細節',
+              completed: false,
+              createdAt: Date.now() - 1800000
+            },
+            {
+              id: 'sample-3',
+              title: '晚餐聚會：預約餐廳',
+              hasTime: true,
+              startTime: '19:00',
+              endTime: '21:00',
+              address: '台北市信義區松高路',
+              webInfo: 'https://maps.google.com 訂位代號 #A82',
+              completed: false,
+              createdAt: Date.now()
+            }
+          ];
+          saveEventsToStorage();
+        }
+
+        if (rawJournals) {
+          state.journalsByDate = JSON.parse(rawJournals);
+        } else {
+          const today = getTodayDateString();
+          state.journalsByDate[today] = '今天天氣微涼，適合把重要的事情一件件完成並打勾劃掉！';
+          saveJournalsToStorage();
+        }
+      } catch (err) {
+        console.error('Failed to load storage:', err);
+      }
+    }
+
+    function saveEventsToStorage() {
+      try {
+        localStorage.setItem(STORAGE_KEY_EVENTS, JSON.stringify(state.eventsByDate));
+      } catch (err) {
+        showToast('儲存空間已滿，無法自動儲存', 'error');
+      }
+    }
+
+    function saveJournalsToStorage() {
+      try {
+        localStorage.setItem(STORAGE_KEY_JOURNALS, JSON.stringify(state.journalsByDate));
+      } catch (err) {
+        console.error('Journal save error:', err);
+      }
+    }
+
+    // =========================================================================
+    // Date Navigation & Week Strip Rendering
+    // =========================================================================
+    function selectDate(dateStr) {
+      if (!dateStr) return;
+      state.selectedDate = dateStr;
+      resetComposer();
+      renderAll();
+    }
+
+    function changeDateBy(offsetDays) {
+      const current = parseLocalDate(state.selectedDate);
+      current.setDate(current.getDate() + offsetDays);
+      selectDate(formatDateToStr(current));
+    }
+
+    function jumpToToday() {
+      selectDate(getTodayDateString());
+    }
+
+    function renderDateHeaderAndStrip() {
+      const { full, weekday } = formatChineseDateHeader(state.selectedDate);
+      document.getElementById('displayDateMain').textContent = full;
+      document.getElementById('displayWeekdayBadge').textContent = weekday;
+      document.getElementById('datePickerInput').value = state.selectedDate;
+
+      const isToday = state.selectedDate === getTodayDateString();
+      const todayBtn = document.getElementById('todayJumpBtn');
+      if (isToday) {
+        todayBtn.classList.add('hidden');
+      } else {
+        todayBtn.classList.remove('hidden');
+      }
+
+      // Render 7-day strip centered around selectedDate (-3 to +3 days)
+      const stripContainer = document.getElementById('weekStripContainer');
+      const centerDate = parseLocalDate(state.selectedDate);
+      const todayStr = getTodayDateString();
+      const shortDays = ['日', '一', '二', '三', '四', '五', '六'];
+
+      let stripHTML = '';
+      for (let i = -3; i <= 3; i++) {
+        const d = new Date(centerDate);
+        d.setDate(centerDate.getDate() + i);
+        const dStr = formatDateToStr(d);
+        const isSelected = dStr === state.selectedDate;
+        const isCurrentToday = dStr === todayStr;
+        const dayEvents = state.eventsByDate[dStr] || [];
+        const hasEvents = dayEvents.length > 0;
+        const hasPending = dayEvents.some(e => !e.completed);
+
+        stripHTML += `
+          <button
+            type="button"
+            onclick="selectDate('${dStr}')"
+            class="flex flex-col items-center py-2 px-1 rounded-xl transition ${
+              isSelected
+                ? 'bg-slate-800 text-white shadow-xs'
+                : isCurrentToday
+                ? 'bg-sage-50 text-sage-700 border border-sage-200/80 hover:bg-sage-100/70'
+                : 'hover:bg-slate-50 text-slate-600'
+            }"
+          >
+            <span class="text-[10px] font-medium ${isSelected ? 'text-slate-300' : 'text-slate-400'}">
+              ${shortDays[d.getDay()]}
+            </span>
+            <span class="text-sm font-bold mt-0.5 font-mono">
+              ${d.getDate()}
+            </span>
+            <span class="w-1.5 h-1.5 rounded-full mt-1 ${
+              hasEvents
+                ? isSelected
+                  ? 'bg-amber-400'
+                  : hasPending
+                  ? 'bg-sage-600'
+                  : 'bg-slate-300'
+                : 'bg-transparent'
+            }"></span>
+          </button>
+        `;
+      }
+      stripContainer.innerHTML = stripHTML;
+    }
+
+    // =========================================================================
+    // Event Form Composer (Create & Edit)
+    // =========================================================================
+    function toggleTimeFields(forceState) {
+      state.showTimeFields = typeof forceState === 'boolean' ? forceState : !state.showTimeFields;
+      const row = document.getElementById('timeFieldsRow');
+      const btn = document.getElementById('toggleTimeBtn');
+      const label = document.getElementById('toggleTimeLabel');
+
+      if (state.showTimeFields) {
+        row.classList.remove('hidden');
+        row.classList.add('grid');
+        btn.classList.add('bg-amber-50', 'border-amber-300', 'text-amber-800');
+        label.textContent = '移除時間設定';
+        if (!document.getElementById('startTimeInput').value) {
+          document.getElementById('startTimeInput').value = '09:00';
+        }
+      } else {
+        row.classList.add('hidden');
+        row.classList.remove('grid');
+        btn.classList.remove('bg-amber-50', 'border-amber-300', 'text-amber-800');
+        label.textContent = '加入時間（選填）';
+      }
+    }
+
+    function handleEventSubmit(e) {
+      e.preventDefault();
+      const titleInput = document.getElementById('eventTitleInput');
+      const title = titleInput.value.trim();
+      if (!title) {
+        showToast('請輸入事件內容', 'error');
+        titleInput.focus();
+        return;
+      }
+
+      const editingId = document.getElementById('editingEventId').value;
+      const hasTime = state.showTimeFields && Boolean(document.getElementById('startTimeInput').value);
+      const startTime = hasTime ? document.getElementById('startTimeInput').value : '';
+      const endTime = hasTime ? document.getElementById('endTimeInput').value : '';
+      const address = document.getElementById('eventAddressInput').value.trim();
+      const webInfo = document.getElementById('eventWebInfoInput').value.trim();
+
+      if (!state.eventsByDate[state.selectedDate]) {
+        state.eventsByDate[state.selectedDate] = [];
+      }
+
+      if (editingId) {
+        // Update existing event
+        const list = state.eventsByDate[state.selectedDate];
+        const idx = list.findIndex(item => item.id === editingId);
+        if (idx !== -1) {
+          list[idx] = {
+            ...list[idx],
+            title,
+            hasTime,
+            startTime,
+            endTime,
+            address,
+            webInfo
+          };
+          showToast('已更新行程事件');
+        }
+      } else {
+        // Create new event
+        const newEvent = {
+          id: 'evt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+          title,
+          hasTime,
+          startTime,
+          endTime,
+          address,
+          webInfo,
+          completed: false,
+          createdAt: Date.now()
+        };
+        state.eventsByDate[state.selectedDate].push(newEvent);
+        showToast('已加入行程清單');
+      }
+
+      saveEventsToStorage();
+      resetComposer();
+      renderAll();
+    }
+
+    function startEditEvent(eventId) {
+      const list = state.eventsByDate[state.selectedDate] || [];
+      const target = list.find(e => e.id === eventId);
+      if (!target) return;
+
+      document.getElementById('editingEventId').value = target.id;
+      document.getElementById('eventTitleInput').value = target.title;
+      document.getElementById('eventAddressInput').value = target.address || '';
+      document.getElementById('eventWebInfoInput').value = target.webInfo || '';
+
+      if (target.hasTime && target.startTime) {
+        toggleTimeFields(true);
+        document.getElementById('startTimeInput').value = target.startTime;
+        document.getElementById('endTimeInput').value = target.endTime || '';
+      } else {
+        toggleTimeFields(false);
+        document.getElementById('startTimeInput').value = '';
+        document.getElementById('endTimeInput').value = '';
+      }
+
+      document.getElementById('composerHeading').innerHTML = `
+        <i data-lucide="edit-3" class="w-4 h-4 text-indigo-600"></i>
+        <span>編輯行程事件</span>
+      `;
+      document.getElementById('submitBtnText').textContent = '儲存變更';
+      document.getElementById('cancelEditBtn').classList.remove('hidden');
+      lucide.createIcons();
+
+      document.getElementById('composerSection').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      document.getElementById('eventTitleInput').focus();
+    }
+
+    function resetComposer() {
+      document.getElementById('eventForm').reset();
+      document.getElementById('editingEventId').value = '';
+      toggleTimeFields(false);
+      document.getElementById('composerHeading').innerHTML = `
+        <i data-lucide="plus-circle" class="w-4 h-4 text-sage-600"></i>
+        <span>新增行程事件</span>
+      `;
+      document.getElementById('submitBtnText').textContent = '加入今日行程';
+      document.getElementById('cancelEditBtn').classList.add('hidden');
+      lucide.createIcons();
+    }
+
+    // =========================================================================
+    // Event Actions (Toggle Complete Strikethrough, Delete, Filter, Sort)
+    // =========================================================================
+    function toggleEventComplete(eventId) {
+      const list = state.eventsByDate[state.selectedDate] || [];
+      const item = list.find(e => e.id === eventId);
+      if (!item) return;
+      item.completed = !item.completed;
+      saveEventsToStorage();
+      renderAll();
+    }
+
+    function deleteEvent(eventId) {
+      const list = state.eventsByDate[state.selectedDate] || [];
+      state.eventsByDate[state.selectedDate] = list.filter(e => e.id !== eventId);
+      saveEventsToStorage();
+      renderAll();
+      showToast('已刪除該事件');
+    }
+
+    function setFilter(filterName) {
+      state.filter = filterName;
+      document.querySelectorAll('.filter-tab').forEach(btn => {
+        if (btn.dataset.filter === filterName) {
+          btn.classList.add('bg-white', 'text-slate-800', 'shadow-2xs');
+          btn.classList.remove('text-slate-600');
+        } else {
+          btn.classList.remove('bg-white', 'text-slate-800', 'shadow-2xs');
+          btn.classList.add('text-slate-600');
+        }
+      });
+      renderEventsList();
+    }
+
+    function toggleSortMode() {
+      state.sortByTime = !state.sortByTime;
+      document.getElementById('sortModeLabel').textContent = state.sortByTime ? '時間優先排序' : '建立順序排序';
+      renderEventsList();
+    }
+
+    function promptClearCompleted() {
+      const list = state.eventsByDate[state.selectedDate] || [];
+      const completedCount = list.filter(e => e.completed).length;
+      if (completedCount === 0) return;
+
+      openConfirmModal(
+        '清除已完成事件',
+        `確定要清除今日 ${completedCount} 項已打勾完成的事件嗎？此動作無法復原。`,
+        () => {
+          state.eventsByDate[state.selectedDate] = list.filter(e => !e.completed);
+          saveEventsToStorage();
+          renderAll();
+          showToast(`已清除 ${completedCount} 項已完成事件`);
+        }
+      );
+    }
+
+    // =========================================================================
+    // Google Calendar & iPhone (.ics) Sync Generators
+    // =========================================================================
+
+    /**
+     * Build a direct Google Calendar Template URL for a single event
+     */
+    function buildGoogleCalendarURL(evt, dateStr) {
+      const base = 'https://calendar.google.com/calendar/render?action=TEMPLATE';
+      const title = encodeURIComponent(evt.title);
+
+      // Date formatting for Google Calendar:
+      // Timed: YYYYMMDDTHHMMSS/YYYYMMDDTHHMMSS
+      // All-day (no time): YYYYMMDD/YYYYMMDD+1
+      const compactDate = dateStr.replace(/-/g, '');
+      let datesParam = '';
+
+      if (evt.hasTime && evt.startTime) {
+        const startCompact = evt.startTime.replace(':', '') + '00';
+        const endStr = evt.endTime || addOneHour(evt.startTime);
+        const endCompact = endStr.replace(':', '') + '00';
+        datesParam = `${compactDate}T${startCompact}/${compactDate}T${endCompact}`;
+      } else {
+        const nextDay = parseLocalDate(dateStr);
+        nextDay.setDate(nextDay.getDate() + 1);
+        const nextCompact = formatDateToStr(nextDay).replace(/-/g, '');
+        datesParam = `${compactDate}/${nextCompact}`;
+      }
+
+      const location = evt.address ? `&location=${encodeURIComponent(evt.address)}` : '';
+
+      let detailsParts = [];
+      if (evt.webInfo) detailsParts.push(`網頁/備註：${evt.webInfo}`);
+      detailsParts.push('（由 日跡 DayLog 網頁日記同步）');
+      const details = `&details=${encodeURIComponent(detailsParts.join('\n'))}`;
+
+      return `${base}&text=${title}&dates=${datesParam}${location}${details}`;
+    }
+
+    /**
+     * Escape text according to RFC 5545 for .ics files
+     */
+    function escapeICSValue(str) {
+      if (!str) return '';
+      return str
+        .replace(/\\/g, '\\\\')
+        .replace(/;/g, '\\;')
+        .replace(/,/g, '\\,')
+        .replace(/\r?\n/g, '\\n');
+    }
+
+    /**
+     * Generate RFC 5545 VEVENT block for an event
+     */
+    function createVEventBlock(evt, dateStr) {
+      const compactDate = dateStr.replace(/-/g, '');
+      const nowStamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+      const uid = `${evt.id}@daylog.local`;
+
+      let dtStartLine = '';
+      let dtEndLine = '';
+
+      if (evt.hasTime && evt.startTime) {
+        const startCompact = evt.startTime.replace(':', '') + '00';
+        const endStr = evt.endTime || addOneHour(evt.startTime);
+        const endCompact = endStr.replace(':', '') + '00';
+        dtStartLine = `DTSTART:${compactDate}T${startCompact}`;
+        dtEndLine = `DTEND:${compactDate}T${endCompact}`;
+      } else {
+        const nextDay = parseLocalDate(dateStr);
+        nextDay.setDate(nextDay.getDate() + 1);
+        const nextCompact = formatDateToStr(nextDay).replace(/-/g, '');
+        dtStartLine = `DTSTART;VALUE=DATE:${compactDate}`;
+        dtEndLine = `DTEND;VALUE=DATE:${nextCompact}`;
+      }
+
+      const { urls } = parseWebInfo(evt.webInfo);
+      const lines = [
+        'BEGIN:VEVENT',
+        `UID:${uid}`,
+        `DTSTAMP:${nowStamp}`,
+        dtStartLine,
+        dtEndLine,
+        `SUMMARY:${escapeICSValue(evt.title)}`
+      ];
+
+      if (evt.address) {
+        lines.push(`LOCATION:${escapeICSValue(evt.address)}`);
+      }
+
+      let desc = evt.webInfo ? `${evt.webInfo}\n` : '';
+      desc += '由 日跡 DayLog 匯出';
+      lines.push(`DESCRIPTION:${escapeICSValue(desc)}`);
+
+      if (urls.length > 0) {
+        lines.push(`URL:${urls[0]}`);
+      }
+
+      lines.push('END:VEVENT');
+      return lines.join('\r\n');
+    }
+
+    function downloadICSFile(filename, vEventsContent) {
+      const icsBody = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//DayLog//Daily Diary & Itinerary//ZH',
+        'CALSCALE:GREGORIAN',
+        'METHOD:PUBLISH',
+        vEventsContent,
+        'END:VCALENDAR'
+      ].join('\r\n');
+
+      const blob = new Blob([icsBody], { type: 'text/calendar;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
+
+    function exportSingleEventICS(eventId) {
+      const list = state.eventsByDate[state.selectedDate] || [];
+      const evt = list.find(e => e.id === eventId);
+      if (!evt) return;
+
+      const vEvent = createVEventBlock(evt, state.selectedDate);
+      downloadICSFile(`行程_${state.selectedDate}_${evt.title.slice(0, 12)}.ics`, vEvent);
+      showToast('已下載 .ics 檔案，iPhone 點擊即可加入行事曆');
+    }
+
+    function exportDayICS() {
+      const list = state.eventsByDate[state.selectedDate] || [];
+      if (list.length === 0) {
+        showToast('當日尚無任何行程可匯出', 'error');
+        return;
+      }
+
+      // Prefer exporting uncompleted events if there are any, otherwise export all
+      const activeEvents = list.filter(e => !e.completed);
+      const targetEvents = activeEvents.length > 0 ? activeEvents : list;
+
+      const vEventsJoined = targetEvents
+        .map(evt => createVEventBlock(evt, state.selectedDate))
+        .join('\r\n');
+
+      downloadICSFile(`日跡行程_${state.selectedDate}.ics`, vEventsJoined);
+      showToast(`已匯出 ${targetEvents.length} 筆行程 (.ics)，可同步至 iPhone`);
+    }
+
+    // =========================================================================
+    // Rendering Event Cards & Journal
+    // =========================================================================
+    function renderEventsList() {
+      const container = document.getElementById('eventsListContainer');
+      const rawList = state.eventsByDate[state.selectedDate] || [];
+
+      // Update counters
+      const total = rawList.length;
+      const completedCount = rawList.filter(e => e.completed).length;
+      const activeCount = total - completedCount;
+
+      document.getElementById('countAll').textContent = total;
+      document.getElementById('countActive').textContent = activeCount;
+      document.getElementById('countCompleted').textContent = completedCount;
+      document.getElementById('dailyProgressText').textContent = `${completedCount} / ${total} 完成`;
+
+      const clearBtn = document.getElementById('clearCompletedBtn');
+      if (completedCount > 0) {
+        clearBtn.classList.remove('hidden');
+      } else {
+        clearBtn.classList.add('hidden');
+      }
+
+      // Filter
+      let filtered = rawList.filter(evt => {
+        if (state.filter === 'active') return !evt.completed;
+        if (state.filter === 'completed') return evt.completed;
+        return true;
+      });
+
+      // Sort
+      if (state.sortByTime) {
+        filtered = [...filtered].sort((a, b) => {
+          // Timed events come first sorted by startTime, then untimed events sorted by createdAt
+          if (a.hasTime && !b.hasTime) return -1;
+          if (!a.hasTime && b.hasTime) return 1;
+          if (a.hasTime && b.hasTime) {
+            return a.startTime.localeCompare(b.startTime);
+          }
+          return a.createdAt - b.createdAt;
+        });
+      }
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="bg-white/70 border border-dashed border-stone-300 rounded-2xl p-8 text-center">
+            <div class="w-11 h-11 rounded-2xl bg-stone-100 text-slate-400 flex items-center justify-center mx-auto mb-3">
+              <i data-lucide="calendar-check-2" class="w-5 h-5"></i>
+            </div>
+            <p class="text-sm font-medium text-slate-600">
+              ${total === 0 ? '這天還沒有記錄任何事件' : '目前篩選條件下沒有符合的項目'}
+            </p>
+            <p class="text-xs text-slate-400 mt-1">
+              ${total === 0 ? '在上方輸入事件內容即可開始規劃，時間、地址與網址皆為選填' : '試著切換「全部」檢視其他項目'}
+            </p>
+          </div>
+        `;
+        lucide.createIcons();
+        return;
+      }
+
+      container.innerHTML = filtered.map(evt => {
+        const googleCalUrl = buildGoogleCalendarURL(evt, state.selectedDate);
+        const mapsUrl = evt.address
+          ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(evt.address)}`
+          : '';
+        const { urls, noteText } = parseWebInfo(evt.webInfo);
+
+        // Time badge markup
+        const timeBadgeHTML = evt.hasTime && evt.startTime
+          ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-mono font-semibold bg-amber-50 text-amber-800 border border-amber-200/80">
+               <i data-lucide="clock" class="w-3 h-3"></i>
+               ${escapeHTML(evt.startTime)}${evt.endTime ? ` - ${escapeHTML(evt.endTime)}` : ''}
+             </span>`
+          : `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-stone-100 text-slate-500">
+               彈性 / 全天
+             </span>`;
+
+        // Address & Map link markup
+        const addressHTML = evt.address
+          ? `<div class="flex flex-wrap items-center gap-1.5 text-xs text-slate-600">
+               <span class="inline-flex items-center gap-1 text-slate-500">
+                 <i data-lucide="map-pin" class="w-3.5 h-3.5 text-rose-500 shrink-0"></i>
+                 <span>${escapeHTML(evt.address)}</span>
+               </span>
+               <a
+                 href="${mapsUrl}"
+                 target="_blank"
+                 rel="noopener noreferrer"
+                 class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-50/80 hover:bg-rose-100 text-rose-700 font-medium transition no-print"
+               >
+                 <span>開啟地圖</span>
+                 <i data-lucide="external-link" class="w-3 h-3"></i>
+               </a>
+             </div>`
+          : '';
+
+        // Web Info & Links markup
+        let webInfoHTML = '';
+        if (urls.length > 0 || noteText) {
+          const linksButtons = urls.map((u, idx) => `
+            <a
+              href="${escapeHTML(u)}"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50/80 hover:bg-indigo-100 text-indigo-700 text-xs font-medium transition no-print"
+            >
+              <i data-lucide="link" class="w-3 h-3"></i>
+              <span>${urls.length > 1 ? `相關網頁 ${idx + 1}` : '開啟網頁'}</span>
+              <i data-lucide="external-link" class="w-3 h-3"></i>
+            </a>
+          `).join('');
+
+          const noteSpan = noteText
+            ? `<span class="text-xs text-slate-500 flex items-center gap-1">
+                 <i data-lucide="file-text" class="w-3.5 h-3.5 text-slate-400 shrink-0"></i>
+                 <span>${escapeHTML(noteText)}</span>
+               </span>`
+            : '';
+
+          webInfoHTML = `
+            <div class="flex flex-wrap items-center gap-2">
+              ${linksButtons}
+              ${noteSpan}
+            </div>
+          `;
+        }
+
+        return `
+          <article
+            class="group bg-white rounded-2xl border ${
+              evt.completed ? 'border-stone-200/60 bg-stone-50/40 event-completed' : 'border-stone-200/90 hover:border-stone-300'
+            } p-3.5 sm:p-4 shadow-2xs transition print-card"
+          >
+            <div class="flex items-start gap-3">
+              <!-- Completion Checkbox -->
+              <button
+                type="button"
+                onclick="toggleEventComplete('${evt.id}')"
+                aria-label="${evt.completed ? '標示為未完成' : '標示為已完成'}"
+                class="mt-0.5 w-5 h-5 rounded-lg border flex items-center justify-center shrink-0 transition ${
+                  evt.completed
+                    ? 'bg-sage-600 border-sage-600 text-white'
+                    : 'border-slate-300 hover:border-sage-600 bg-white text-transparent'
+                }"
+              >
+                <i data-lucide="check" class="w-3.5 h-3.5 stroke-[3]"></i>
+              </button>
+
+              <!-- Main Event Content -->
+              <div class="flex-1 min-w-0 space-y-2">
+                <div class="flex flex-wrap items-center gap-2">
+                  ${timeBadgeHTML}
+                  <h3 class="event-title-text text-sm sm:text-base font-semibold text-slate-800 break-words">
+                    ${escapeHTML(evt.title)}
+                  </h3>
+                </div>
+
+                ${(addressHTML || webInfoHTML) ? `
+                  <div class="event-details-group space-y-1.5 pt-0.5">
+                    ${addressHTML}
+                    ${webInfoHTML}
+                  </div>
+                ` : ''}
+
+                <!-- Per-Event Quick Sync & Action Footer -->
+                <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-stone-100 no-print">
+                  <!-- Google & iPhone Sync Pills -->
+                  <div class="flex items-center gap-1.5">
+                    <a
+                      href="${googleCalUrl}"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="同步此事件至 Google 日曆"
+                      class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-emerald-50/80 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/60 transition"
+                    >
+                      <i data-lucide="calendar-plus" class="w-3 h-3"></i>
+                      <span>Google 日曆</span>
+                    </a>
+
+                    <button
+                      type="button"
+                      onclick="exportSingleEventICS('${evt.id}')"
+                      title="下載 .ics 檔案加入 iPhone / Apple 行事曆"
+                      class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-indigo-50/80 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/60 transition"
+                    >
+                      <i data-lucide="smartphone" class="w-3 h-3"></i>
+                      <span>iPhone (.ics)</span>
+                    </button>
+                  </div>
+
+                  <!-- Edit & Delete -->
+                  <div class="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onclick="startEditEvent('${evt.id}')"
+                      title="編輯事件"
+                      class="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
+                    >
+                      <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+                    </button>
+                    <button
+                      type="button"
+                      onclick="deleteEvent('${evt.id}')"
+                      title="刪除事件"
+                      class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
+                    >
+                      <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </article>
+        `;
+      }).join('');
+
+      lucide.createIcons();
+    }
+
+    function renderJournalForDate() {
+      const textarea = document.getElementById('dailyJournalInput');
+      textarea.value = state.journalsByDate[state.selectedDate] || '';
+    }
+
+    let journalSaveTimer = null;
+    function handleJournalInput(value) {
+      state.journalsByDate[state.selectedDate] = value;
+      const indicator = document.getElementById('journalSavedIndicator');
+      indicator.textContent = '儲存中...';
+      clearTimeout(journalSaveTimer);
+      journalSaveTimer = setTimeout(() => {
+        saveJournalsToStorage();
+        indicator.textContent = '已自動儲存';
+      }, 350);
+    }
+
+    function renderAll() {
+      renderDateHeaderAndStrip();
+      renderEventsList();
+      renderJournalForDate();
+    }
+
+    // =========================================================================
+    // Backup / Restore & Modals & Toasts
+    // =========================================================================
+    function exportJSONBackup() {
+      const payload = {
+        exportedAt: new Date().toISOString(),
+        eventsByDate: state.eventsByDate,
+        journalsByDate: state.journalsByDate
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `日跡備份_${getTodayDateString()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('已下載 JSON 完整備份檔');
+    }
+
+    function importJSONBackup(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        try {
+          const parsed = JSON.parse(e.target.result);
+          if (parsed.eventsByDate && typeof parsed.eventsByDate === 'object') {
+            state.eventsByDate = parsed.eventsByDate;
+            state.journalsByDate = parsed.journalsByDate || {};
+            saveEventsToStorage();
+            saveJournalsToStorage();
+            renderAll();
+            showToast('備份資料還原成功！');
+          } else {
+            showToast('檔案格式不正確', 'error');
+          }
+        } catch (err) {
+          showToast('讀取備份檔案失敗', 'error');
+        }
+        event.target.value = '';
+      };
+      reader.readAsText(file);
+    }
+
+    function toggleMoreMenu(forceState) {
+      const menu = document.getElementById('moreMenuDropdown');
+      const shouldShow = typeof forceState === 'boolean' ? forceState : menu.classList.contains('hidden');
+      if (shouldShow) {
+        menu.classList.remove('hidden');
+      } else {
+        menu.classList.add('hidden');
+      }
+    }
+
+    function toggleSyncGuideModal(show) {
+      const modal = document.getElementById('syncGuideModal');
+      if (show) {
+        modal.classList.remove('hidden');
+      } else {
+        modal.classList.add('hidden');
+      }
+    }
+
+    function openConfirmModal(title, message, onConfirm) {
+      document.getElementById('confirmModalTitle').textContent = title;
+      document.getElementById('confirmModalMessage').textContent = message;
+      pendingConfirmCallback = onConfirm;
+      document.getElementById('confirmModal').classList.remove('hidden');
+    }
+
+    function closeConfirmModal() {
+      document.getElementById('confirmModal').classList.add('hidden');
+      pendingConfirmCallback = null;
+    }
+
+    document.getElementById('confirmModalActionBtn').addEventListener('click', () => {
+      if (typeof pendingConfirmCallback === 'function') {
+        pendingConfirmCallback();
+      }
+      closeConfirmModal();
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      const btn = document.getElementById('moreMenuBtn');
+      const menu = document.getElementById('moreMenuDropdown');
+      if (btn && menu && !btn.contains(e.target) && !menu.contains(e.target)) {
+        menu.classList.add('hidden');
+      }
+    });
+
+    function showToast(message, type = 'success') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      const bgClass = type === 'error' ? 'bg-rose-600 text-white' : 'bg-slate-800 text-white';
+      toast.className = `${bgClass} px-4 py-2.5 rounded-xl shadow-lg text-xs sm:text-sm font-medium flex items-center gap-2 transition-all duration-300 opacity-0 translate-y-2`;
+      toast.innerHTML = `<span>${escapeHTML(message)}</span>`;
+      container.appendChild(toast);
+
+      requestAnimationFrame(() => {
+        toast.classList.remove('opacity-0', 'translate-y-2');
+      });
+
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-2');
+        setTimeout(() => toast.remove(), 300);
+      }, 2800);
+    }
+
+    // =========================================================================
+    // Boot Application
+    // =========================================================================
+    window.addEventListener('DOMContentLoaded', () => {
+      loadFromStorage();
+      renderAll();
+      lucide.createIcons();
+    });
+  </script>
+</body>
+</html>
